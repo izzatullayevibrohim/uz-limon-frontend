@@ -2,6 +2,7 @@ import { useState, type MouseEvent } from "react";
 import {type LocalizedText} from "../context/LangContext"
 import { useLang, t } from "../context/LangContext";
 import { NAV_LINKS } from "../data/content";
+import { FaTelegram } from "react-icons/fa";
 
 interface NavLink extends LocalizedText {
   href: string;
@@ -127,8 +128,10 @@ export default function Header() {
             background: "#229ED9", color: "#fff", fontSize: "1.1rem", fontWeight: 700,
             padding: "14px 32px", borderRadius: 12, textDecoration: "none",
             textAlign: "center", width: "100%", maxWidth: 320,
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
           }}>
-            ✈️ Telegram
+            <FaTelegram size={24} />
+            Telegram
           </a>
         </div>
       )}

@@ -1,5 +1,6 @@
 import { useLang, t } from "../context/LangContext";
 import type { LocalizedText } from "../context/LangContext";
+import { FaTelegram } from "react-icons/fa";
 
 export default function Hero() {
   const { lang } = useLang();
@@ -61,7 +62,7 @@ export default function Hero() {
             padding: "16px 28px", borderRadius: 12, display: "flex", alignItems: "center",
             gap: 10, textDecoration: "none",
           }}>
-            ✈️ {t(tgBtn, lang)}
+            <FaTelegram size={24} /> {t(tgBtn, lang)}
           </a>
         </div>
 

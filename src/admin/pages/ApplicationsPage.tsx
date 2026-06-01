@@ -1,24 +1,43 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
-import type { Application, ApplicationStatus } from "../types";
-import { getApplications, updateApplicationStatus } from "../api/applications";
+import type { Application, ApplicationStatus, ApplicationType } from "../types";
+import { getApplications, updateApplicationStatus, getApplicationTypes } from "../api/applications";
 import AdminLayout from "../components/AdminLayout";
 import StatusBadge from "../components/StatusBadge";
+import { useLang, t } from "../context/LangContext";
+import type { Lang } from "../context/LangContext";
 
-const STATUS_OPTIONS: { value: ApplicationStatus; label: string }[] = [
-  { value: "pending", label: "В ожидании" },
-  { value: "in_progress", label: "В работе" },
-  { value: "completed", label: "Завершено" },
-  { value: "rejected", label: "Отклонено" },
+type StatusOption = { value: ApplicationStatus; key: "stat_pending"|"stat_in_progress"|"stat_completed"|"stat_rejected" };
+
+const STATUS_OPTIONS: StatusOption[] = [
+  { value: 0, key: "stat_pending" },
+  { value: 1, key: "stat_in_progress" },
+  { value: 2, key: "stat_completed" },
+  { value: 3, key: "stat_rejected" },
 ];
 
+function getAppTypeName(type: ApplicationType, lang: Lang): string {
+  if (lang === "ru") return type.name_ru;
+  if (lang === "uz") return type.name_uz;
+  return type.name_en ?? type.name_ru;
+}
+
 export default function ApplicationsPage() {
+  const { lang } = useLang();
   const [applications, setApplications] = useState<Application[]>([]);
+  const [appTypes, setAppTypes] = useState<ApplicationType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<ApplicationStatus | "all">("all");
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [selectedApp, setSelectedApp] = useState<Application | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+
+  function getTypeName(id: number): string {
+    const found = appTypes.find(tp => tp.id === id);
+    if (!found) return `#${id}`;
+    return getAppTypeName(found, lang);
+  }
 
   async function loadApplications() {
     try {
@@ -27,7 +46,7 @@ export default function ApplicationsPage() {
       const data = await getApplications();
       setApplications(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ошибка загрузки");
+      setError(err instanceof Error ? err.message : t("err_loading", lang));
     } finally {
       setLoading(false);
     }
@@ -35,6 +54,9 @@ export default function ApplicationsPage() {
 
   useEffect(() => {
     loadApplications();
+    getApplicationTypes()
+      .then(types => setAppTypes(types))
+      .catch(err => console.error("getApplicationTypes failed:", err));
   }, []);
 
   async function handleStatusChange(id: number, status: ApplicationStatus) {
@@ -44,10 +66,15 @@ export default function ApplicationsPage() {
       setApplications(prev => prev.map(a => a.id === id ? updated : a));
       if (selectedApp?.id === id) setSelectedApp(updated);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Не удалось обновить статус");
+      alert(err instanceof Error ? err.message : t("err_update_status", lang));
     } finally {
       setUpdatingId(null);
     }
+  }
+
+  function closeModal() {
+    setSelectedApp(null);
+    setIsEditing(false);
   }
 
   const filtered = filter === "all"
@@ -55,32 +82,32 @@ export default function ApplicationsPage() {
     : applications.filter(a => a.status === filter);
 
   const stats = {
-    total: applications.length,
-    pending: applications.filter(a => a.status === "pending").length,
-    in_progress: applications.filter(a => a.status === "in_progress").length,
-    completed: applications.filter(a => a.status === "completed").length,
-    rejected: applications.filter(a => a.status === "rejected").length,
+    total:       applications.length,
+    pending:     applications.filter(a => a.status === 0).length,
+    in_progress: applications.filter(a => a.status === 1).length,
+    completed:   applications.filter(a => a.status === 2).length,
+    rejected:    applications.filter(a => a.status === 3).length,
   };
 
   return (
     <AdminLayout>
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ fontFamily: "'Merriweather',serif", fontSize: "1.75rem", color: "#1B5E20", marginBottom: 4 }}>
-          Заявки
+          {t("apps_title", lang)}
         </h1>
         <div style={{ fontSize: "0.9rem", color: "#8A7E6E" }}>
-          Управление обращениями от посетителей сайта
+          {t("apps_subtitle", lang)}
         </div>
       </div>
 
       {/* Stats */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 14, marginBottom: 24 }}>
         {[
-          { label: "Всего", value: stats.total, color: "#1E1A14", bg: "#fff" },
-          { label: "В ожидании", value: stats.pending, color: "#E65100", bg: "#FFF3E0" },
-          { label: "В работе", value: stats.in_progress, color: "#1565C0", bg: "#E3F2FD" },
-          { label: "Завершено", value: stats.completed, color: "#1B5E20", bg: "#E8F5E9" },
-          { label: "Отклонено", value: stats.rejected, color: "#C62828", bg: "#FFEBEE" },
+          { label: t("stat_total",       lang), value: stats.total,       color: "#1E1A14", bg: "#fff"    },
+          { label: t("stat_pending",     lang), value: stats.pending,     color: "#E65100", bg: "#FFF3E0" },
+          { label: t("stat_in_progress", lang), value: stats.in_progress, color: "#1565C0", bg: "#E3F2FD" },
+          { label: t("stat_completed",   lang), value: stats.completed,   color: "#1B5E20", bg: "#E8F5E9" },
+          { label: t("stat_rejected",    lang), value: stats.rejected,    color: "#C62828", bg: "#FFEBEE" },
         ].map((s, i) => (
           <div key={i} style={{ background: s.bg, border: "1px solid #DDD0B8", borderRadius: 12, padding: "16px 20px" }}>
             <div style={{ fontSize: "0.75rem", textTransform: "uppercase", color: "#8A7E6E", letterSpacing: "0.06em", marginBottom: 6 }}>{s.label}</div>
@@ -91,18 +118,14 @@ export default function ApplicationsPage() {
 
       {/* Filter */}
       <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
-        {[
-          { value: "all" as const, label: "Все" },
-          ...STATUS_OPTIONS,
+        {[{ value: "all" as const, label: t("filter_all", lang) },
+          ...STATUS_OPTIONS.map(o => ({ value: o.value, label: t(o.key, lang) }))
         ].map(opt => (
           <button
             key={opt.value}
             onClick={() => setFilter(opt.value)}
             style={{
-              padding: "8px 16px",
-              borderRadius: 20,
-              fontSize: "0.85rem",
-              fontWeight: 600,
+              padding: "8px 16px", borderRadius: 20, fontSize: "0.85rem", fontWeight: 600,
               border: "1px solid",
               borderColor: filter === opt.value ? "#1B5E20" : "#DDD0B8",
               background: filter === opt.value ? "#1B5E20" : "#fff",
@@ -121,39 +144,28 @@ export default function ApplicationsPage() {
             cursor: "pointer", marginLeft: "auto",
           }}
         >
-          🔄 Обновить
+          {t("btn_refresh", lang)}
         </button>
       </div>
 
       {/* Table */}
       <div style={{ background: "#fff", border: "1px solid #DDD0B8", borderRadius: 12, overflow: "hidden" }}>
-        {loading && (
-          <div style={{ padding: "40px", textAlign: "center", color: "#8A7E6E" }}>Загрузка...</div>
-        )}
-
-        {error && (
-          <div style={{ padding: "20px", color: "#C62828", background: "#FFEBEE" }}>
-            ⚠️ {error}
-          </div>
-        )}
-
+        {loading && <div style={{ padding: "40px", textAlign: "center", color: "#8A7E6E" }}>{t("loading", lang)}</div>}
+        {error && <div style={{ padding: "20px", color: "#C62828", background: "#FFEBEE" }}>⚠️ {error}</div>}
         {!loading && !error && filtered.length === 0 && (
-          <div style={{ padding: "40px", textAlign: "center", color: "#8A7E6E" }}>
-            Заявок нет
-          </div>
+          <div style={{ padding: "40px", textAlign: "center", color: "#8A7E6E" }}>{t("no_apps", lang)}</div>
         )}
-
         {!loading && !error && filtered.length > 0 && (
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: "#F5EDD6", textAlign: "left" }}>
-                <th style={thStyle}>ID</th>
-                <th style={thStyle}>Имя</th>
-                <th style={thStyle}>Телефон</th>
-                <th style={thStyle}>Тема</th>
-                <th style={thStyle}>Дата</th>
-                <th style={thStyle}>Статус</th>
-                <th style={thStyle}>Действия</th>
+                <th style={thStyle}>{t("th_id",      lang)}</th>
+                <th style={thStyle}>{t("th_name",    lang)}</th>
+                <th style={thStyle}>{t("th_phone",   lang)}</th>
+                <th style={thStyle}>{t("th_subject", lang)}</th>
+                <th style={thStyle}>{t("th_date",    lang)}</th>
+                <th style={thStyle}>{t("th_status",  lang)}</th>
+                <th style={thStyle}>{t("th_actions", lang)}</th>
               </tr>
             </thead>
             <tbody>
@@ -166,37 +178,20 @@ export default function ApplicationsPage() {
                       {app.phone_number}
                     </a>
                   </td>
-                  <td style={tdStyle}>{app.application_type?.name_ru ?? `#${app.application_type_id}`}</td>
-                  <td style={{ ...tdStyle, fontSize: "0.82rem", color: "#8A7E6E" }}>
-                    {formatDate(app.created_at)}
-                  </td>
+                  <td style={tdStyle}>{getTypeName(app.application_type_id)}</td>
+                  <td style={{ ...tdStyle, fontSize: "0.82rem", color: "#8A7E6E" }}>{formatDate(app.created_at, lang)}</td>
                   <td style={tdStyle}><StatusBadge status={app.status} /></td>
                   <td style={tdStyle}>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <select
-                        value={app.status}
-                        onChange={e => handleStatusChange(app.id, e.target.value as ApplicationStatus)}
-                        disabled={updatingId === app.id}
-                        style={{
-                          padding: "6px 10px", borderRadius: 6, fontSize: "0.82rem",
-                          border: "1px solid #DDD0B8", background: "#fff", cursor: "pointer",
-                        }}
-                      >
-                        {STATUS_OPTIONS.map(o => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={() => setSelectedApp(app)}
-                        style={{
-                          padding: "6px 12px", borderRadius: 6, fontSize: "0.82rem",
-                          fontWeight: 600, background: "#1B5E20", color: "#fff",
-                          border: "none", cursor: "pointer",
-                        }}
-                      >
-                        👁 Просмотр
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => { setSelectedApp(app); setIsEditing(false); }}
+                      style={{
+                        padding: "6px 12px", borderRadius: 6, fontSize: "0.82rem",
+                        fontWeight: 600, background: "#1B5E20", color: "#fff",
+                        border: "none", cursor: "pointer",
+                      }}
+                    >
+                      {t("btn_view", lang)}
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -205,10 +200,10 @@ export default function ApplicationsPage() {
         )}
       </div>
 
-      {/* Modal — detail */}
+      {/* Modal */}
       {selectedApp && (
         <div
-          onClick={() => setSelectedApp(null)}
+          onClick={closeModal}
           style={{
             position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000,
             display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
@@ -224,55 +219,83 @@ export default function ApplicationsPage() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
               <div>
                 <div style={{ fontSize: "0.78rem", color: "#8A7E6E", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>
-                  Заявка #{selectedApp.id}
+                  {t("modal_app_label", lang)} #{selectedApp.id}
                 </div>
                 <h2 style={{ fontFamily: "'Merriweather',serif", fontSize: "1.4rem", color: "#1B5E20" }}>
                   {selectedApp.full_name}
                 </h2>
               </div>
-              <button
-                onClick={() => setSelectedApp(null)}
-                style={{ background: "none", border: "none", fontSize: "1.5rem", cursor: "pointer", color: "#8A7E6E" }}
-              >✕</button>
+              <button onClick={closeModal} style={{ background: "none", border: "none", fontSize: "1.5rem", cursor: "pointer", color: "#8A7E6E" }}>
+                ✕
+              </button>
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <DetailRow label="Телефон">
+              <DetailRow label={t("modal_phone", lang)}>
                 <a href={`tel:${selectedApp.phone_number}`} style={{ color: "#1B5E20", fontWeight: 600 }}>
                   {selectedApp.phone_number}
                 </a>
               </DetailRow>
-              <DetailRow label="Тема">
-                {selectedApp.application_type?.name_ru ?? `#${selectedApp.application_type_id}`}
+              <DetailRow label={t("modal_subject", lang)}>
+                {getTypeName(selectedApp.application_type_id)}
               </DetailRow>
-              <DetailRow label="Дата">{formatDate(selectedApp.created_at)}</DetailRow>
-              <DetailRow label="Статус">
-                <StatusBadge status={selectedApp.status} />
-              </DetailRow>
-              <DetailRow label="Сообщение">
-                <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
-                  {selectedApp.description || <span style={{ color: "#8A7E6E", fontStyle: "italic" }}>(пусто)</span>}
+              <DetailRow label={t("modal_date", lang)}>{formatDate(selectedApp.created_at, lang)}</DetailRow>
+              <DetailRow label={t("modal_status", lang)}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <StatusBadge status={selectedApp.status} />
+                  <button
+                    onClick={() => setIsEditing(v => !v)}
+                    style={{
+                      padding: "4px 12px", borderRadius: 20, fontSize: "0.78rem",
+                      fontWeight: 600, border: "1px solid #DDD0B8",
+                      background: isEditing ? "#1B5E20" : "#fff",
+                      color: isEditing ? "#fff" : "#4A4438",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {isEditing ? t("modal_cancel", lang) : t("modal_edit", lang)}
+                  </button>
                 </div>
               </DetailRow>
-            </div>
 
-            <div style={{ marginTop: 24, paddingTop: 20, borderTop: "1px solid #F0E6CC" }}>
-              <div style={{ fontSize: "0.82rem", fontWeight: 600, color: "#4A4438", marginBottom: 8 }}>
-                Изменить статус
-              </div>
-              <select
-                value={selectedApp.status}
-                onChange={e => handleStatusChange(selectedApp.id, e.target.value as ApplicationStatus)}
-                disabled={updatingId === selectedApp.id}
-                style={{
-                  width: "100%", padding: "12px", borderRadius: 8,
-                  border: "2px solid #DDD0B8", background: "#fff", fontSize: "0.95rem",
-                }}
-              >
-                {STATUS_OPTIONS.map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
+              {isEditing && (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {STATUS_OPTIONS.map(o => {
+                    const isActive = selectedApp.status === o.value;
+                    const colors: Record<number, { activeBg: string; color: string; border: string }> = {
+                      0: { activeBg: "#FFF3E0", color: "#E65100", border: "#FFB74D" },
+                      1: { activeBg: "#E3F2FD", color: "#1565C0", border: "#64B5F6" },
+                      2: { activeBg: "#E8F5E9", color: "#1B5E20", border: "#81C784" },
+                      3: { activeBg: "#FFEBEE", color: "#C62828", border: "#EF9A9A" },
+                    };
+                    const c = colors[o.value];
+                    return (
+                      <button
+                        key={o.value}
+                        onClick={() => { handleStatusChange(selectedApp.id, o.value); setIsEditing(false); }}
+                        disabled={updatingId === selectedApp.id || isActive}
+                        style={{
+                          padding: "8px 18px", borderRadius: 20, fontSize: "0.85rem",
+                          fontWeight: 700, cursor: isActive ? "default" : "pointer",
+                          border: `2px solid ${isActive ? c.border : "#DDD0B8"}`,
+                          background: isActive ? c.activeBg : "#fff",
+                          color: isActive ? c.color : "#4A4438",
+                          opacity: updatingId === selectedApp.id && !isActive ? 0.5 : 1,
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        {isActive && "✓ "}{t(o.key, lang)}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <DetailRow label={t("modal_msg", lang)}>
+                <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                  {selectedApp.description || <span style={{ color: "#8A7E6E", fontStyle: "italic" }}>{t("modal_empty", lang)}</span>}
+                </div>
+              </DetailRow>
             </div>
           </div>
         </div>
@@ -292,10 +315,11 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string, lang: string): string {
   try {
     const d = new Date(iso);
-    return d.toLocaleString("ru-RU", {
+    const locale = lang === "uz" ? "uz-UZ" : lang === "en" ? "en-US" : "ru-RU";
+    return d.toLocaleString(locale, {
       day: "2-digit", month: "2-digit", year: "numeric",
       hour: "2-digit", minute: "2-digit",
     });

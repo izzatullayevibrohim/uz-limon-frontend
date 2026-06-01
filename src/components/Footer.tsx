@@ -1,5 +1,6 @@
 import { useLang} from "../context/LangContext";
 import type { LocalizedText } from "../context/LangContext";
+import { FaTelegram } from "react-icons/fa";
 
 interface NavLink extends LocalizedText {
   href: string;
@@ -26,10 +27,10 @@ export default function Footer() {
   const svcTitle: LocalizedText = { ru: "Услуги", uz: "Xizmatlar", en: "Services" };
   const contactTitle: LocalizedText = { ru: "Контакты", uz: "Aloqa", en: "Contact" };
 
-  const contactLinks: [string, string][] = [
-    ["tel:+998712020101", "📞 +998 71 202-01-01"],
-    ["https://t.me/uzblimon", "✈️ @uzblimon"],
-    ["mailto:info@uzblimon.uz", "✉️ info@uzblimon.uz"],
+  const contactLinks = [
+    { href: "tel:+998712020101", label: "📞 +998 71 202-01-01", icon: null },
+    { href: "https://t.me/uzblimon", label: "@uzblimon", icon: <FaTelegram size={18} /> },
+    { href: "mailto:info@uzblimon.uz", label: "✉️ info@uzblimon.uz", icon: null },
   ];
 
   return (
@@ -70,9 +71,12 @@ export default function Footer() {
               {contactTitle[lang]}
             </h4>
             <ul style={{ listStyle: "none", padding: 0 }}>
-              {contactLinks.map(([href, label], i) => (
+              {contactLinks.map((item, i) => (
                 <li key={i} style={{ marginBottom: 9 }}>
-                  <a href={href} style={{ fontSize: "0.87rem", color: "rgba(255,255,255,0.55)", textDecoration: "none" }}>{label}</a>
+                  <a href={item.href} style={{ fontSize: "0.87rem", color: "rgba(255,255,255,0.55)", textDecoration: "none", display: "flex", alignItems: "center", gap: 6 }}>
+                    {item.icon}
+                    {item.label}
+                  </a>
                 </li>
               ))}
             </ul>
